@@ -27,3 +27,10 @@ The sample size or percent can be computed based on a given count of the blocks 
 A second implementation of dynamic sampling was introduced in Oracle 10g Release 1 to support SQL Profiling, a technique used in SQL Tune . The latter is more generic, e.g., it supports joins. 
 
 The choice was deliberate to design a newer version of dynamic sampling because of the complexity and quality issues known in the older implementation. Another justification was also that the old version will become obsolete after we switch to using the newer version.
+
+
+# Stale Statistics
+
+Even when all the statistics including histograms and extended statistics are available they may lead the optimizer to generate a bad execution plan because the statistics are stale, i.e. the statistics on a table do not accurately reflect the table data. The auto statistics job was introduced
+
+in Oracle 10g Release 1  to run daily and gather statistics of tables that do not have statistics or whose statistics are stale. The auto statistics is very effective for what it has been designed: it is acceptable to wait 24 hours to refresh statistics. However, we have seen situations where statistics become stale in a very short time period after they have been gathering to the point that using the execution plan built on stale statistics is very inefficient. For example, consider a table used to store a company’s sales data including the sales date. After new rows are inserted the maximum statistics on the sales date column becomes stale since all new rows have a higher sales date than the maximum value seen during the last statistics gathering. For any query that fetches the most recently added sales data the query optimizer will think that there are very few or no rows returned by the access to the sales table leading to the selection of a bad access path to the sales table (typically the index on the sales date column), a bad join method (typically a cartesian product) or join orders (sales table is a leading table). This is commonly known as the “out-of-range” condition: the value specified in the predicate on the sales date column is outside the column statistics value domain.
