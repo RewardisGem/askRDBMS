@@ -39,3 +39,13 @@ in Oracle 10g Release 1  to run daily and gather statistics of tables that do no
 # Density of Frequency Histograms
 
 A frequency histogram is built during statistics gathering when the number of distinct values is less than the supported maximum number of buckets (254). The selectivity estimate of equality predicates using frequency histograms is usually of very good quality except when the value specified in the predicate is not found in the histogram. This can happen for two reasons: the value appears in very few rows (low frequency) or the histogram is stale. For both cases the optimizer uses density as selectivity for equality predicates involving theses values. The density is computed as half the lowest frequency in the histogram.
+
+
+## Non popular value
+
+Histograms are gathered based on a smallsample (usually 5500 rows) therefore values that have a low frequency are unlikely to be seen in the sample. Using density in this case is likely to cause an over-estimate in the selectivity and leads to a bad execution plan. The project “New Histogram Types” (31794) [NHT_12gR1_DS] planned for Oracle 12g Release 1 will mostly resolve this issue by building frequency histograms during the same pass we gather basic statistics and where we use all the table rows.
+
+## Stale Histogram
+
+Even when a frequency histogram is built on all the table rows the histogram can become stale following DMLs on the table. This can either cause the histogram frequencies to be out of sync with the actual frequencies or a new value not being captured in the histogram.
+
