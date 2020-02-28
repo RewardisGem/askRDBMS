@@ -1,3 +1,5 @@
+# Goal
+
 The goal of a query optimizer is to generate the best execution plan for a SQL statement. The best execution plan is defined as the plan with the lowest cost among all considered candidate
 plans. The cost computation accounts for factors of the query execution such as IO, CPU, and communication. 
 
