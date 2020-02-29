@@ -49,3 +49,13 @@ Histograms are gathered based on a smallsample (usually 5500 rows) therefore val
 
 Even when a frequency histogram is built on all the table rows the histogram can become stale following DMLs on the table. This can either cause the histogram frequencies to be out of sync with the actual frequencies or a new value not being captured in the histogram.
 
+
+# Dynamic Sampling in the Optimizer
+## Overview
+
+Dynamic sampling (DS) was introduced in Oracle 9i Release 2 to improve the optimizer's ability to generate good execution plans. 
+
+The most common misconception is that DS can be used as a substitute for optimizer statistics. 
+
+The goal of DS is to augment the optimizer statistics; it is used when regular statistics are not sufficient to get good quality cardinality estimates. During the compilation of a SQL statement, the optimizer decides whether and how to use DS by considering whether the available statistics are sufficient to generate a good execution plan. If the available statistics are not sufficient, dynamic sampling will be used. It is typically used to compensate for missing or insufficient statistics that would otherwise lead to a very bad plan.
+
