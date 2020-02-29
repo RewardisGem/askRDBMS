@@ -59,3 +59,23 @@ The most common misconception is that DS can be used as a substitute for optimiz
 
 The goal of DS is to augment the optimizer statistics; it is used when regular statistics are not sufficient to get good quality cardinality estimates. During the compilation of a SQL statement, the optimizer decides whether and how to use DS by considering whether the available statistics are sufficient to generate a good execution plan. If the available statistics are not sufficient, dynamic sampling will be used. It is typically used to compensate for missing or insufficient statistics that would otherwise lead to a very bad plan.
 
+For the case where one or more of the tables in the query does not have statistics, DS is used by the optimizer to gather basic statistics on these tables before optimizing the statement. The statistics gathered in this case are not as high a quality or as complete as the statistics gathered using the DBMS_STATS package. This trade off is made to limit the impact on the parse time of the SQL statement. The statistics gathered by DS include the number of blocks and the number of rows of the table, and the number of nulls and the number of distinct values of the columns used in the join predicates. It is also used to estimate the selectivity of the filter predicates.
+
+
+Another scenario where DS is used is when the statement contains a complex predicate expression and extended statistics are not available. Extended statistics were introduced in Oracle Database 11g Release 1 with the goal to help the optimizer get good quality cardinality estimates for complex predicate expressions. Extended statistics allows optimizer statistics to capture correlation between columns and deal with expressions on columns. 
+
+```sql
+SELECT *
+FROM customers
+WHERE cust_city='Los Angeles'
+AND cust_state_province='CA'
+-----------------------------------------------
+|Id |Operation |Name |Rows |
+-----------------------------------------------
+| 0|SELECTSTATEMENT | | 1|
+| 1| TABLEACCESSFULL|CUSTOMERS| 1|
+-----------------------------------------------
+PredicateInformation(identified byoperationid):
+---------------------------------------------------
+1- filter("CUST_CITY"='LosAngeles'AND"CUST_STATE_PROVINCE"='CA')
+```
