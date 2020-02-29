@@ -98,7 +98,7 @@ PredicateInformation(identified byoperationid):
 Note
 -----The shape of predicates in the SQL statement
 -dynamicsamplingusedforthisstatement(level=4)
-```sql
+```
 
 
 
