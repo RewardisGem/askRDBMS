@@ -79,3 +79,40 @@ PredicateInformation(identified byoperationid):
 ---------------------------------------------------
 1- filter("CUST_CITY"='LosAngeles'AND"CUST_STATE_PROVINCE"='CA')
 ```
+
+
+
+In the above execution plan the optimizer estimates the number of rows as 1 but the actual number of rows returned by the scan of the CUSTOMERS table is 13. The execution plan when dynamic sampling is used (see below) shows that the number of rows changed to 13, the correct number:
+
+
+```sql
+-----------------------------------------------
+|Id |Operation |Name |Rows |
+-----------------------------------------------
+| 0|SELECTSTATEMENT | | 13|
+| 1| TABLEACCESSFULL|CUSTOMERS| 13|
+-----------------------------------------------
+PredicateInformation(identified byoperationid):
+---------------------------------------------------
+1- filter("CUST_CITY"='LosAngeles'AND"CUST_STATE_PROVINCE"='CA')
+Note
+-----The shape of predicates in the SQL statement
+-dynamicsamplingusedforthisstatement(level=4)
+```sql
+
+
+
+During the compilation of a SQL statement, the optimizer decides whether to use DS and how by considering the following factors
+
+
+* Availability of optimizer statistics on the tables referenced in the SQL statement
+* The shape of predicates in the SQL statement
+* The value of the DYNAMIC_SAMPLING hint, if any
+* The value of the OPTIMIZER_DYNAMIC_SAMPLING parameter
+
+
+
+
+
+
+
