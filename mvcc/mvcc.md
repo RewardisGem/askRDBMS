@@ -9,3 +9,9 @@
 * Env_UBA: Environment UBA. UBA of the current transaction.
 
 
+The following fields belong to the kcbcr structure that is associated with each buffer in cache. They can be accessed via X$BH.
+
+* CR_SCN:	SCN for the block in the buffer
+* CR_XID: 	ID of the transaction that constructed this CR 			version of the block
+* CR_UBA: 	UBA associated with the transaction indicated by 		CR_XID
+* CR_SFL: 	snapshot flag
