@@ -19,8 +19,8 @@ The following fields belong to the kcbcr structure that is associated with each 
 
 * Provides the “Read Committed” isolation level
 * Two possible levels for read consistency:
-** Statement: The data returned by a query is consistent with respect to the start of the query (Snap_SCN = Current SCN at the time the query started its execute phase). 
-** Transaction: Data returned by a query is consistent with respect to the beginning of the transaction (Snap_SCN = Current SCN at the time the transaction started).
+  * Statement: The data returned by a query is consistent with respect to the start of the query (Snap_SCN = Current SCN at the time the query started its execute phase). 
+  * Transaction: Data returned by a query is consistent with respect to the beginning of the transaction (Snap_SCN = Current SCN at the time the transaction started).
 
 
 A block is accessed in CR (consistent read) mode when the transaction does not intend to change the block.
