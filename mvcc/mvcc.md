@@ -36,6 +36,7 @@ To ensure read consistency, the Oracle server uses:
 # Consistency Read Example
 
 T1 commits at SCN 30.
+
 T2 commits at SCN 31.
 
 T3 executes a select that requires seeing the data before or equal to SCN 30 and its own changes done before the SELECT.
