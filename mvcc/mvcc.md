@@ -30,3 +30,14 @@ To ensure read consistency, the Oracle server uses:
 * A multiversion consistency model (at block level)
 * Undo segments to generate consistent blocks (snapshots)
 
+
+
+
+# Consistency Read Example
+
+T1 commits at SCN 30.
+T2 commits at SCN 31.
+
+T3 executes a select that requires seeing the data before or equal to SCN 30 and its own changes done before the SELECT.
+It is assumed, in the example, that the best version of block B1 in the cache is the current version of B1. All the changes not visible to T3 need to be rolled back. This is a matter of rolling back the two updates performed by T2 because at the time the T3 started, T2 had not committed yet.
+
