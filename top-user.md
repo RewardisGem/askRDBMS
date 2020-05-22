@@ -11,7 +11,9 @@
 
 排名	Company	                  Oracle技术使用情况
 1	    Amazon亚马逊	          近年对外宣布完全去掉Oracle RDBMS
+
 2	    Google	                  应当完全没用
+
 3	    京东	                  有用, 且用了Oracle Exadata一体机
 4	    Facebook	              使用，且用了Oracle Exadata一体机
 5	    Alibaba	                  早年宣布完全去掉Oracle RDBMS，但似乎前几年还在用peoplesoft，如果没去掉这个人事库，那么大概还剩一套
