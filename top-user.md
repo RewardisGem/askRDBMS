@@ -11,15 +11,37 @@
 以下排名根据维基百科List of the largest Internet companies https://en.wikipedia.org/wiki/List_of_largest_Internet_companies 
 
 
-1. Amazon亚马逊          近年对外宣布完全去掉Oracle RDBMS
-2. Google谷歌            应当完全没用
-3. 京东                  有用
-4.	Facebook脸书 	        使用，且用了Oracle Exadata一体机
-5. alibaba阿里巴巴       早年宣布完全去掉Oracle RDBMS，但似乎前几年还在用peoplesoft，如果没去掉这个人事库，那么大概还剩一套
-6. tencent腾讯           有用，似乎有过一套8节点RAC
-7. 苏宁suning.com        不清楚，似乎主要用ibm的技术
-8. tesla特斯拉           有用，和oracle关系不错
-9. netflix              重度使用，且用了Oracle Exadata一体机
+1.  Amazon亚马逊          近年对外宣布完全去掉Oracle RDBMS
+2.  Google谷歌            应当完全没用
+3.  京东                  有用，且用了Oracle Exadata一体机
+4.	 Facebook脸书 	        使用，且用了Oracle Exadata一体机
+5.  alibaba阿里巴巴       早年宣布完全去掉Oracle RDBMS，但似乎前几年还在用peoplesoft，如果没去掉这个人事库，那么大概还剩一套
+6.  tencent腾讯           有用，似乎有过一套8节点RAC
+7.  苏宁suning.com        不清楚，似乎主要用ibm的技术
+8.  tesla特斯拉           有用，和oracle关系不错
+9.  netflix              重度使用，且用了Oracle Exadata一体机
+10. 字节跳动bytedance      不清楚 ，似乎完全没用
+11. paypal                重度使用，且用了Oracle Exadata一体机
+12. SalesForce            重度使用
+13. 百度baidu             有少量使用，有多台Exadata
+14. booking.com           有用
+15. uber                  有用
+16. 美团点评               有少量使用
+17. Expedia               有用
+18. Rakuten乐天            重度使用，且用了Oracle Exadata一体机
+19. Adobe                 有用
+20. Ebay                  重度使用，且用了Oracle Exadata一体机
+
+ 
+
+
+
+ 
+
+
+
+
+
 
 
 
