@@ -12,7 +12,7 @@
 
 
 1.  Amazon亚马逊          近年对外宣布完全去掉Oracle RDBMS
-2.  Google谷歌            应当完全没用
+2.  Google谷歌            有用                       ==> 根据报道Google之前一直在使用Oracle财务软件等企业管理软件(2021-04-06 Google 与Oracle的诉讼后有报道准备迁移到SAP)，那么应当配套使用了Oracle RDBMS
 3.  京东                  有用，且用了Oracle Exadata一体机
 4.	 Facebook脸书 	        使用，且用了Oracle Exadata一体机
 5.  alibaba阿里巴巴       早年宣布完全去掉Oracle RDBMS，但似乎前几年还在用peoplesoft，如果没去掉这个人事库，那么大概还剩一套
