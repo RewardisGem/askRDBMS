@@ -1,0 +1,784 @@
+http://oracsd.blogspot.com/2011/05/aix.html
+
+
+
+
+Oracle Memory Consumption : the truth at last !
+
+
+1] OS : AIX point of view [ 5.3 – 6.1 ]
+
+How to Calculate Memory Usage on AIX
+
+It’s a very difficult field of study. Many articles … Many mistakes …
+Anyway, I compute Real Oracle memory consumption as follow.
+( credits :
+http://www.ibm.com/developerworks/aix/library/au-vmm/
+http://oracleunix.wordpress.com/2005/10/31/note1664911-diagnosing-oracle-memory-on-aix-using-svmon/ )
+
+AIX Memory is composed of 3 areas:
+KERNEL - FILESYSTEM CACHE  - APPLICATION PROGRAMS
+
+Among APPLICATION PROGRAMS, we have
+Shared Program Code ( Text footprint )
+Processes Shared & Private Data
+On Oracle box, we can find Oracle SGA ( shared ) & PGA ( private ).
+
+Computational pages are pages used for the text, data, stack, and shared memory of a process.
+Non-computational pages are pages containing file data for files that are being read and written.
+
+1.1 AIX study : one Oracle instance
+
+Let’s find out how much memory an Oracle instance ( 11gR2 ) is using.
+
+1.1.1 SGA - easy, use ipcs or show parameter               ex: = 348 MB
+
+In Oracle environment, set ORACLE_SID, then
+
+
+$ IDs=$( sysresv|egrep -v 'Oracle Instance|IPC|Shared|ID'|awk '{ print $1 }' ) ; IDs2=$(echo $IDs|sed 's/ /|/g') ; ipcs -am | egrep "$IDs2"| awk '$1 !~ /^#/ && $1 ~ "m" { S +=$10 }; END { print S/1024/1024" MB" }'
+348.008 MB
+
+
+Note :
+11G « Memory_target » parameter splits the memory in 3 shared segments vs. pre-11G : 1 segment.
+
+1.1.2 Shared Code - easy, use « ps v »                                    = 177 MB
+
+On PMON process, see TSIZ = Text Image ( Oracle Binary 11gR2 = 177 MB vs 10gR2 = 90 MB )
+
+
+$ ps v 3015004 # unit = KB
+     PID    TTY STAT  TIME PGIN  SIZE   RSS   LIM  TSIZ   TRS %CPU %MEM COMMAND
+ 3015004      - A     0:05  142 20036 87700    xx 181736 67664  0.0  2.0 ora_pmo
+
+
+1.1.3 PGA – a bit more difficult, but use again « ps v » = 327 MB
+
+[Metalink 123754.1 ] Sum up every Private Data of instance processes : Substract RSS-TRS
+Since RSS includes both working-segment and code-segment pages, if we subtract TRS, which is just the code-segment pages, from RSS, we are left with only the working-segment pages, or private memory.
+
+
+$ for i in $( ps -ef | grep -i <INSTANCE_NAME> |egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print "Private Mem "S/1024" MB" }'
+Private Mem 326.996 MB
+
+
+Note :
+-- One instance, DEDICATED processes only ( MB )
+$ for i in $( ps -ef | grep '<INSTANCE> (LOCAL=NO)' …
+-- One instance, Background + Shared Servers processes ( MB )
+$ for i in $( ps -ef | grep 'ora_.*_<INSTANCE>' …
+
+1.1.4 Total Memory used by the instance
+
+MEM AIX ( MB )
+Oracle box
+One instance
+SGA
+358
+Shared Code
+177
+Private Data
+327
+Total Instance
+862
+
+1.2 AIX 5.3 Every Oracle Instance
+
+Using this method, let’s do the math for every Oracle Instances 10G & 11G on my AIX server ; we assume that « oracle » is the unix owner.
+
+SGAs
+
+
+$ ipcs -am | grep oracle | awk '$1 !~ /^#/ && $1 ~ "m" { S +=$10 }; END { print "SGAs Mem "S/1024/1024" MB" }'
+1472.02 MB
+
+
+Binaries
+
+
+$ for i in $( ps -ef | grep oracle | awk '{ print $2 }' ) ; do ps v ${i} | tail -1 | grep -v SIZE | awk '{ print $9 }'; done | sort -n | uniq | awk 'BEGIN { S=0 } { S+=$1 }; END { print "Binaries Mem "S/1024" MB" }'
+279.573 MB
+
+
+PGA
+
+
+$ for i in $( ps -ef | grep oracle |egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print "Private Mem "S/1024" MB" }'
+Private Mem 1232.38 MB
+
+
+MEM AIX ( MB )
+Oracle box
+SGA
+1472
+Shared Code
+279
+Private Data
+1232
+Total Oracle Instance
+2983
+
+1.3 The whole Server
+
+1.3.0 Commands SVMON & VMSTAT
+
+
+$ svmon -G
+               size       inuse        free         pin     virtual
+memory      1003520      857582      145938      298478      872970
+pg space    1376256      228692
+
+               work        pers        clnt       other
+pin          262732           0           0       35746
+in use       747497           7      110078 à FILESYSTEM CACHE, COMP+NonCOMP
+
+PageSize   PoolSize      inuse       pgsp        pin    virtual
+s   4 KB          -     740926     228692     240078     756314
+m  64 KB          -       7291          0       3650       7291
+
+$ vmstat -v
+              1003520 memory pages    à TOTAL MEMORY
+               960222 lruable pages
+               144483 free pages      à FREE MEM
+                    1 memory pools
+               298530 pinned pages
+                 80.0 maxpin percentage
+                  5.0 minperm percentage
+                  7.0 maxperm percentage
+                  6.5 numperm percentage à FS CACHE NonCOMP only (see svmon)
+                62757 file pages
+                  0.0 compressed percentage
+                    0 compressed pages
+                  6.5 numclient percentage
+                  7.0 maxclient percentage
+                62750 client pages
+                    0 remote pageouts scheduled
+                27736 pending disk I/Os blocked with no pbuf
+               165493 paging space I/Os blocked with no psbuf
+                 2228 filesystem I/Os blocked with no fsbuf
+                    0 client filesystem I/Os blocked with no fsbuf
+                 5067 external pager filesystem I/Os blocked with no fsbuf
+                    0 Virtualized Partition Memory Page Faults
+                 0.00 Time resolving virtualized partition memory page faults
+
+Note :
+110078-62757 pages are Computational ( Text of programs ) = 47321 pages 184 MB
+
+Total Real memory & Free memory
+
+
+$ echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+Free Mem: 3596.98 MB out of Total Memory: 7712 MB
+
+
+1.3.1 KERNEL
+
+Run « nmon », then « m » and find % Memory taken by the Kernel System    10.7% on the right
+10.7 % of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB = 7712 MB
+= 771 MB
+
+Don’t know yet how to get this figure from command-line shell script.
+Now I can figure out « Kernel & Applications » easily and hence I’ll get Kernel from there :
+Kernel = Kernel+Applications - Shared Segments - Shared Code binaries - Private Mem
+
+
+# KERNEL + APPLICATION PROGRAMS
+echo "Kernel & Applications: $(svmon -G | grep 'in use' | awk '{ print ($3)*4096/1024/1024 }') MB"
+
+
+1.3.2 FILESYSTEM CACHE
+
+
+$ echo "Cache FS: $(svmon -G | grep 'in use' | awk '{ print ($4+$5)*4096/1024/1024 }') MB"
+
+
+1.3.3 APPLICATION PROGRAMS
+
+We compute every unix processes.
+
+Shared Segments ( ipcs )
+
+
+$ ipcs -am|awk '$1 !~ /^#/ && $1 ~ "m" { S +=$10 }; END { print "Shared Segments "S/1024/1024" MB" }'
+
+
+Binaries
+
+
+$ for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | tail -1 | grep -v SIZE | awk '{ print $9 }'; done | sort -n | uniq | awk 'BEGIN { S=0 } { S+=$1 }; END { print "Shared Code binaries "S/1024" MB" }'
+
+
+Private Data
+
+
+$ for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print "Private Mem "S/1024" MB" }'
+
+
+
+$ ./compte_mem.ksh
+Free Mem: 3595.16 MB out of Total Memory: 7712 MB
+Cache FS: 405.902 MB
+Shared Segments 1628.02 MB
+Shared Code binaries 290.897 MB
+Private Mem 1375.26 MB
+Free Mem: 3586.2 MB out of Total Memory: 7712 MB
+
+
+1.3.4 Summary
+
+overall
+
+Whole Server
+MB
+Phys RAM
+7712
+Kernel
+771
+Free
+3595
+Cache FS
+405
+APPLICATION PROGRAMS
+Shared
+1628
+Binaries
+290
+Private
+1375
+
+
+$ cat ./compte_mem.ksh
+# Whole Server
+#+-+-+-+-+-+-+
+
+# Total Real memory & Free memory
+echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+
+# FILESYSTEM CACHE
+echo "Cache FS: $(svmon -G | grep 'in use' | awk '{ print ($4+$5)*4096/1024/1024 }') MB"
+
+# Shared Segments ( ipc )
+ipcs -am|awk '$1 !~ /^#/ && $1 ~ "m" { S +=$10 }; END { print "Shared Segments "S/1024/1024" MB" }'
+
+# Binaries
+for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | tail -1 | grep -v SIZE | awk '{ print $9 }'; done | sort -n | uniq | awk 'BEGIN { S=0 } { S+=$1 }; END { print "Shared Code binaries "S/1024" MB" }'
+
+# Private Data
+for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print "Private Mem "S/1024" MB" }'
+
+# Total Real memory & Free memory again
+echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+
+
+Another one with Kernel computed :
+
+
+$ cat compte_mem.ksh
+#!/bin/ksh
+# AC 13/06/27
+
+# Whole Server
+#+-+-+-+-+-+-+
+
+print "\n** overall **"
+# Total Real memory & Free memory
+echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+
+print "\n** Applications Programs **"
+# Shared Segments ( ipc )
+S1=$( ipcs -am|awk '$1 !~ /^#/ && $1 ~ "m" { S +=$10 }; END { print S/1024/1024 }' )
+print "Shared Segments ${S1} MB"
+
+# Binaries
+S2=$( for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | tail -1 | grep -v SIZE | awk '{ print $9 }'; done | sort -n | uniq | awk 'BEGIN { S=0 } { S+=$1 }; END { print S/1024 }' )
+print "Shared Code binaries ${S2} MB"
+
+# Private Data
+#for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do svmon -P ${i} | grep 'work text data BSS heap' | awk '{ print $9 }'; done | awk 'BEGIN { S=0 } { S+=$1 }; END { print "Private Mem "S*4/1024" MB" }'
+P=$( for i in $( ps -ef | egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print S/1024 }' )
+print "Private Mem ${P} MB"
+
+print "\n** System : Kernel + FS Cache **"
+# KERNEL + APPLICATION PROGRAMS
+KA=$(svmon -G | grep 'in use' | awk '{ print ($3)*4096/1024/1024 }')
+(( K = KA-S1-S2-P ))
+echo "Kernel = ${K} MB"
+
+# FILESYSTEM CACHE
+echo "Cache FS: $(svmon -G | grep 'in use' | awk '{ print ($4+$5)*4096/1024/1024 }') MB"
+
+print "\n** overall again **"
+# Total Real memory & Free memory
+echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+
+
+
+$ ./compte_mem.ksh
+
+** overall **
+Free Mem: 571.27 MB out of Total Memory: 7744 MB
+
+** Applications Programs **
+Shared Segments 2942.04 MB
+Shared Code binaries 291.009 MB
+Private Mem 2069.82 MB
+
+** System : Kernel + FS Cache **
+Kernel = 1281 MB
+Cache FS: 536.199 MB
+
+** overall again **
+Free Mem: 625.195 MB out of Total Memory: 7744 MB
+
+
+MEM AIX ( MB )
+dev-1
+Kernel
+1281
+Cache Filesystem
+536
+Shared Segments
+2942
+Shared Code binaries
+291
+Private Data
+2069
+Free Mem
+625
+Total Real memory
+7744
+
+PGA
+
+Private Mem = Private Mem dedicated + Private Mem Background
+
+
+$ cat ./compte_mem_pga.ksh
+#!/bin/ksh
+
+for i in INSTORA1 INSTORA2 INSTORA3 INSTORA4 ; do
+
+echo $i
+cnt_ps=$( ps -ef | grep -v grep | grep -ic $i ) ; pv_mm=$( for i in $( ps -ef | grep -i $i |egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print S/1024 }' ) ; (( pv_ps=pv_mm/cnt_ps )) ; print "${cnt_ps} processes ; Private Mem = ${pv_mm} MB ; ${pv_ps} MB per process"
+
+cnt_ps=$( ps -ef | grep -v grep | grep -ic "$i (LOCAL=NO)" ) ; pv_mm=$( for i in $( ps -ef | grep -i "$i (LOCAL=NO)" |egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print S/1024 }' )
+if (( cnt_ps != 0 )) ; then
+(( pv_ps=pv_mm/cnt_ps )) ; print "${cnt_ps} Dedicated processes ; Private Mem Dedicated = ${pv_mm} MB ; ${pv_ps} MB per process"
+else print "${cnt_ps} Dedicated processes"
+fi
+
+cnt_ps=$( ps -ef | grep -v grep | grep -ic "ora_.*_$i" ) ; pv_mm=$( for i in $( ps -ef | grep -i "ora_.*_$i" |egrep -v "grep|UID" | awk '{ print $2 }' ) ; do ps v ${i} | grep -v PID | awk '{ print $7" "$10 }'; done | awk 'BEGIN { S=0 } { S+=$1-$2 }; END { print S/1024 }' )
+if (( cnt_ps != 0 )) ; then
+(( pv_ps=pv_mm/cnt_ps )) ; print "${cnt_ps} Background processes ; Private Mem Background = ${pv_mm} MB ; ${pv_ps} MB per process"
+else print "${cnt_ps} Background processes"
+fi
+
+done
+
+
+$ ./compte_mem_pga.ksh
+
+INSTORA1
+32 processes ; Private Mem = 329.852 MB ; 10 MB per process
+2 Dedicated processes ; Private Mem Dedicated = 19.7109 MB ; 9 MB per process
+30 Background processes ; Private Mem Background = 310.141 MB ; 10 MB per process
+
+INSTORA2
+26 processes ; Private Mem = 289.816 MB ; 11 MB per process
+0 Dedicated processes
+26 Background processes ; Private Mem Background = 289.816 MB ; 11 MB per process
+
+INSTORA3
+17 processes ; Private Mem = 163.41 MB ; 9 MB per process
+4 Dedicated processes ; Private Mem Dedicated = 40.3789 MB ; 10 MB per process
+13 Background processes ; Private Mem Background = 123.031 MB ; 9 MB per process
+
+INSTORA4
+57 processes ; Private Mem = 996.723 MB ; 17 MB per process
+33 Dedicated processes ; Private Mem Dedicated = 595.148 MB ; 18 MB per process
+23 Background processes ; Private Mem Background = 382.953 MB ; 16 MB per process
+
+
+11G Processes consume 70 % more memory than 10G !!
+
+
+1’] OS : Linux [ CentOS ]
+
+How to Calculate Memory Usage on Linux
+
+1’.1 AMM 11G+ Automatic Memory Management
+
+Calculate how many MB taken in Memory by AMM for a given instance
+This space is created within “tmpfs”, an OS common region, with many files ( granule size ) to be able to allocate from SGA or PGA equally. SGA Freed files may be reused by PGA and vice-versa.
+
+Assuming Granule are 16 MB size
+
+$ cat ./compte_mem_AMM.ksh
+#!/bin/ksh
+export SID=`grep -v '^#' /etc/oratab|cut -d ':' -f1`
+for i in $SID ; do
+echo ${i}
+export ORACLE_SID=${i}
+gran_sz=16777216
+#gran_sz=$( sqlplus -s '/ as sysdba' @get_gsz.sql )
+# rw-r----- 1 oracle dba 16777216 Nov 25 14:41 ora_<SID>
+ls -l /dev/shm | grep ${i} |awk '{total +=$5};          END {print "allocated "total/1024/1024" MB"}'
+ls -l /dev/shm | grep ${i} |awk -v gsz=16777216 '{total +=gsz}; END {print "out of total reserved "total/1024/1024" MB"}'
+done
+
+$ ./compte_mem_AMM.ksh
+DB12C
+allocated 4016 MB
+out of total reserved 6160 MB
+DB12Cb
+allocated 1856 MB
+out of total reserved 3088 MB
+DB12Cb srv-xnetbdiqr-1:/home/oracle > DB12C
+DB12C srv-xnetbdiqr-1:/home/oracle > sqlplus '/ as sysdba'
+
+SQL*Plus: Release 12.1.0.2.0 Production on Fri Nov 27 10:59:15 2015
+
+Connected to:
+Oracle Database 12c Enterprise Edition Release 12.1.0.2.0 - 64bit Production
+With the Partitioning, OLAP, Advanced Analytics and Real Application Testing options
+
+SQL> shut immediate
+Database closed.
+Database dismounted.
+ORACLE instance shut down.
+SQL> Disconnected from Oracle Database 12c Enterprise Edition Release 12.1.0.2.0 - 64bit Production
+With the Partitioning, OLAP, Advanced Analytics and Real Application Testing options
+
+$ ./compte_mem_AMM.ksh
+DB12C
+allocated 0 MB
+out of total reserved 0 MB
+DB12Cb
+allocated 1856 MB
+out of total reserved 3088 MB
+
+$ sqlplus '/ as sysdba'
+startup
+
+ORACLE instance started.
+
+Total System Global Area 6442450944 bytes
+Fixed Size                  2938792 bytes
+Variable Size            3254782040 bytes
+Database Buffers         3170893824 bytes
+Redo Buffers               13836288 bytes
+Database mounted.
+Database opened.
+
+SQL> Disconnected from Oracle Database 12c Enterprise Edition Release 12.1.0.2.0 - 64bit Production
+With the Partitioning, OLAP, Advanced Analytics and Real Application Testing options
+
+$ ./compte_mem_AMM.ksh
+DB12C
+allocated 4016 MB
+out of total reserved 6160 MB
+DB12Cb
+allocated 1856 MB
+out of total reserved 3088 MB
+
+
+2] Oracle point of view
+
+2.1 Global
+
+
+SELECT 'SGA: '||name mem_areas , round(value/1024/1024) megabytes FROM v$sga
+UNION ALL
+select 'PGA: sum ' mem_areas, round(sum(p.pga_alloc_mem)/1024/1024) megabytes
+FROM v$session s ,v$sesstat pcur,v$process p WHERE pcur.statistic#=20 AND s.paddr=p.addr AND pcur.sid=s.sid  ;
+
+
+MEM_AREAS
+MEGABYTES
+SGA: Fixed Size
+2
+SGA: Variable Size
+1216
+SGA: Database Buffers
+304
+SGA: Redo Buffers
+7
+PGA: sum
+79
+
+2.2 SGA+PGA Breakdown
+
+2.2.1 10G Assuming that ASMM is used [ SGA_TARGET ]
+
+-- 10g
+-- default cache
+
+select a.component, b.current_size "total_sz MB" , ceil(b.current_size-(b.buffers*b.block_size/1024/1024)) "free_MB_sz" , ceil((b.current_size-(b.buffers*b.block_size/1024/1024))/b.current_size*100) "free_percent" ,
+a.oper_count "nb_RESIZE_OPS" , min_size/1024/1024 "min_sz MB", max_size/1024/1024 "max_sz MB"
+from v$sga_dynamic_components a , v$buffer_pool b
+where component like '%buffer%' and a.current_size != 0 union
+-- other pools
+select component, current_size/1024/1024 "total_sz MB" , ceil(b.bytes/1024/1024) "free_MB_sz" , ceil(b.bytes/a.current_size*100) "free_percent" , oper_count "nb_RESIZE_OPS" ,
+min_size/1024/1024 "min_sz MB", max_size/1024/1024 "max_sz MB"
+from v$sga_dynamic_components a , v$sgastat b
+where  a.component = b.pool and b.name like '%free mem%' union
+-- 2/ PGA
+select 'PGA', PGA_MB_Sz , PGA_Free_MB_Sz , ceil(PGA_Free_MB_Sz/PGA_MB_Sz*100) "free_percent" ,0 , 0 , PGA_Max_MB_Sz from
+( select round(sum(p.pga_alloc_mem)/1024/1024) PGA_MB_Sz , round(sum(p.pga_freeable_mem)/1024/1024) PGA_Free_MB_Sz , round(sum(p.pga_max_mem)/1024/1024) PGA_Max_MB_Sz
+from v$session s ,v$sesstat pcur,v$process p WHERE pcur.statistic#=20 AND s.paddr=p.addr AND pcur.sid=s.sid )
+order by 1 ;
+
+
+COMPONENT
+total_sz MB
+free_MB_sz
+free_percent
+nb_RESIZE_OPS
+min_sz MB
+max_sz MB
+DEFAULT buffer cache
+960
+33
+4
+104
+960
+2176
+java pool
+160
+155
+97
+0
+160
+160
+large pool
+80
+38
+48
+7
+48
+80
+PGA
+147
+32
+22
+0
+0
+566
+shared pool
+1824
+237
+13
+78
+656
+1824
+streams pool
+32
+31
+96
+19
+16
+48
+
+2.2.2 11G Assuming that ASMM is used [ MEMORY_TARGET includes PGA ]
+
+-- 11g add pga 1 total_mem
+-- 1/ SGA
+-- default cache
+select a.component, b.current_size "total_sz MB" , ceil(b.current_size-(b.buffers*b.block_size/1024/1024)) "free_MB_sz" , ceil((b.current_size-(b.buffers*b.block_size/1024/1024))/b.current_size*100) "free_percent" ,
+a.oper_count "nb_RESIZE_OPS" ,
+min_size/1024/1024 "min_sz MB", max_size/1024/1024 "max_sz MB"
+from v$memory_dynamic_components a , v$buffer_pool b
+where component like '%buffer%' and a.current_size != 0
+union
+-- other pools
+select component, current_size/1024/1024 "total_sz MB" , ceil(b.bytes/1024/1024) "free_MB_sz" , ceil(b.bytes/a.current_size*100) "free_percent" , oper_count "nb_RESIZE_OPS" ,
+min_size/1024/1024 "min_sz MB", max_size/1024/1024 "max_sz MB"
+from v$memory_dynamic_components a , v$sgastat b
+where  a.component = b.pool and b.name like '%free mem%'
+union
+-- 2/ PGA
+-- pga target & free mem
+-- SELECT ceil(value/1024/1024) "max_pga_sz MB" FROM v$pgastat WHERE name = 'maximum PGA allocated'
+select component, current_size/1024/1024 "total_sz MB" , ceil((current_size-b.value)/1024/1024) "free_MB_sz" , ceil(((current_size-b.value)/a.current_size*100)) "free_percent" ,
+oper_count "nb_RESIZE_OPS" , min_size/1024/1024 "min_sz MB", max_size/1024/1024 "max_sz MB"
+from v$memory_dynamic_components a , v$pgastat b
+where component like 'PGA%Target%' and b.name = 'total PGA inuse'
+order by 1
+
+COMPONENT
+total_sz MB
+free_MB_sz
+free_percent
+nb_RESIZE_OPS
+min_sz MB
+max_sz MB
+DEFAULT buffer cache
+256
+10
+4
+0
+256
+256
+java pool
+32
+2
+5
+0
+32
+32
+large pool
+16
+9
+52
+0
+16
+16
+PGA Target
+528
+470
+89
+0
+528
+528
+shared pool
+608
+320
+53
+0
+608
+608
+streams pool
+32
+32
+99
+0
+32
+32
+
+2.3 Shared Pool Breakdown
+
+
+select * from (
+select pool,name,ceil(sum(bytes/1024/1024)) Size_MB from v$sgastat
+where pool in ('shared pool','streams pool','large pool','java pool') group by rollup(pool,NAME)
+) where name is not null order by 3 desc ;
+
+POOL         NAME         CEIL(SIZE_MB)
+large pool   session heap 231
+shared pool  sql area     95
+
+
+With that statement, I discovered my Shared Servers were eating much of the Shared Pool because of the Session Heap allocation.
+LARGE_POOL_SIZE specifies (in bytes) the size of the large pool allocation heap. The large pool allocation heap is used in shared server systems for session
+
+2.4 PGA inside
+
+V$pgastat
+
+-- Dedicated sessions memory consumption : Detail
+
+SELECT    'PGA: pid '||p.spid pid,ceil(p.pga_alloc_mem/1024/1024) MB,
+           p.username ps_user,p.program ps_program,
+           s.logon_time,s.sid,s.serial#,s.username,s.machine,s.osuser,s.program
+FROM v$session s ,v$sesstat pcur,v$process p WHERE pcur.statistic#=20 AND s.paddr=p.addr AND pcur.sid=s.sid and s.server = 'DEDICATED'
+ORDER BY 2 DESC ;
+
+
+-- Shared Servers Total memory consumption
+
+select sum(value)/1024/1024 "Shared Servers MB max mem allocation" from v$sesstat ss, v$statname st, v$session s
+where st.name = 'session uga memory max' and ss.statistic# = st.statistic# and ss.sid = s.sid and server != 'DEDICATED'
+
+
+-- Shared Servers Top Consumers : Max memory
+
+select schemaname,ceil(sum(value/1024/1024)) "Shared Servers MB max mem allocation"
+from v$sesstat ss, v$statname st , v$session s
+where st.name = 'session uga memory max' and ss.statistic# = st.statistic# and ss.sid = s.sid and server != 'DEDICATED'
+group by schemaname order by 2 desc ;
+
+
+2.5 Oracle how to limit pga memory used
+
+A long awaited feature :
+12c Oracle has introduced a new Parameter PGA_AGGREGATE_LIMIT for controlling the maximum amount of PGA.
+The default limit of this Parameter is set to greatest value of these rules:
+ 2 GB Memory
+ 200% of PGA_AGGREGATE_TARGET
+ 3MB per process (Parameter)
+So what happen, when the limit is  reached?
+Simple answer. Oracle is aborting the session which has the most untunable PGA, if the PGA is still over the limit then this session are terminated. For demonstration i have created a small test function which is consuming PGA.
+
+
+3] How much Free Memory does my server really have
+
+3.1 AIX
+
+
+-- VMM Free MEM ( 4 KB pages )
+
+$ echo "Free Mem: $(vmstat -v | grep free | awk '{ print $1*4096/1024/1024 }') MB out of Total Memory: $(vmstat -v | grep 'memory pages' | awk '{ print $1*4096/1024/1024 }') MB"
+
+Free Mem: 621.688 MB out of Total Memory: 3920 MB
+
+
+
+3.2 Linux
+
+
+$ echo "Free Mem: $( free -m | grep cache: | awk '{ print $4 }') MB"
+
+Free Mem: 1128 MB
+
+
+
+$ echo "Physical RAM: $( cat /proc/meminfo | grep MemTotal | awk '{ print $2/1024 }') MB"
+Physical RAM: 3948,88 MB
+
+
+Note : Processors
+
+AIX
+
+
+$ pmcycles -m
+CPU 0 runs at 4204 MHz
+CPU 1 runs at 4204 MHz
+CPU 2 runs at 4204 MHz
+CPU 3 runs at 4204 MHz
+
+
+LINUX
+
+
+$ grep 'model name'  /proc/cpuinfo
+model name      : Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+model name      : Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+model name      : Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+model name      : Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+
+
+
+4] Linux specifics
+
+ORA-00845 - Which value for /dev/shm is needed to startup database without ORA-00845 (Doc ID 1399209.1)
+
+$ cat compte_mem_AMM.ksh
+
+#!/bin/ksh
+export SID=`grep -v '^#' /etc/oratab|cut -d ':' -f1`
+for i in $SID ; do
+echo ${i}
+export ORACLE_SID=${i}
+gran_sz=16777216
+#gran_sz=$( sqlplus -s '/ as sysdba' @get_gsz.sql )
+# rw-r----- 1 oracle dba 16777216 Nov 25 14:41 ora_<SID>
+ls -l /dev/shm | grep ${i} |awk '{total +=$5};          END {print "allocated "total/1024/1024" MB"}'
+ls -l /dev/shm | grep ${i} |awk -v gsz=16777216 '{total +=gsz}; END {print "out of total reserved "total/1024/1024" MB"}'
+done
+
+$ ./compte_mem_AMM.ksh
+DBNAME
+allocated 4016 MB
+out of total reserved 6160 MB
